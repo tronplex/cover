@@ -1,0 +1,8 @@
+Microsoft
+Cisco
+Citrix
+Ubiquiti
+Apple
+Linux
+Mozilla
+7-Zip

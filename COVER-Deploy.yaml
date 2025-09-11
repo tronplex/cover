@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation Template to deploy COVER Lambda Function
+
+Parameters:
+  S3BucketName:
+    Type: String
+    Description: Name of the S3 bucket for storing software list and reports
+    Default: cover-dev-deployment00001 # Replace with a unique bucket name
+  CodeS3Bucket:
+    Type: String
+    Description: S3 bucket where the Lambda code ZIP is stored
+  CodeS3Key:
+    Type: String
+    Description: S3 key (path) to the Lambda code ZIP file
+  EmailRecipient:
+    Type: String
+    Description: Email address to receive reports
+  EmailSender:
+    Type: String
+    Description: Verified SES sender email address
+  LambdaFunctionName:
+    Type: String
+    Default: "COVER-Lambda-Function"
+    Description: "Base name for Lambda funtion"
+
+Resources:
+  CoverS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${S3BucketName}
+                  - !Sub arn:aws:s3:::${S3BucketName}/*
+        - PolicyName: SESAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ses:SendRawEmail
+                Resource: '*'
+
+  CoverLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${LambdaFunctionName}-${AWS::StackName}"
+      Handler: cover_function.lambda_handler  # Assuming the file is named cover_function.py
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.12
+      Timeout: 300  # 5 minutes, adjust as needed
+      MemorySize: 256  # Adjust as needed
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3Key
+      Environment:
+        Variables:
+          EMAIL_RECIPIENT: !Ref EmailRecipient
+          EMAIL_SENDER: !Ref EmailSender
+          S3_BUCKET: !Ref S3BucketName
+
+Outputs:
+  LambdaFunctionArn:
+    Value: !GetAtt CoverLambdaFunction.Arn
+    Description: ARN of the COVER Lambda Function
+  S3BucketName:
+    Value: !Ref S3BucketName
+    Description: Name of the S3 bucket for reports and software list
